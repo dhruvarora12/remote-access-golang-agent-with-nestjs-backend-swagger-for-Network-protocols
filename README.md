@@ -344,22 +344,6 @@ The server automatically serves agent binaries via the download controller:
 
 The download endpoint accepts a `?hostId=` parameter to pre-configure the agent with a specific host identifier.
 
-## Security Considerations
-
-⚠️ **Important Security Notes**:
-
-1. **Authentication**: The current implementation does not include authentication. Consider adding:
-   - API key authentication
-   - JWT tokens
-   - mTLS for WebSocket connections
-
-2. **Authorization**: Implement role-based access control (RBAC) for production use
-
-3. **Command Execution**: The agent has full shell access - restrict to trusted administrators only
-
-4. **Network Security**: Use TLS/SSL for all communications in production
-
-5. **Agent Validation**: Implement agent signature verification before allowing connections
 
 ## Development
 
