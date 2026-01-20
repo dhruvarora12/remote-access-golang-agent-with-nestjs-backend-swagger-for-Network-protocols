@@ -1,0 +1,38 @@
+#!/bin/bash
+# Create log directory
+mkdir -p /var/log/remote-agent
+
+# ✅ Create config directory
+mkdir -p /etc/remote-agent
+
+# Create LaunchDaemon
+cat > /Library/LaunchDaemons/com.remoteagent.plist << 'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.remoteagent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/remote-agent</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/var/log/remote-agent/agent.log</string>
+    <key>StandardErrorPath</key>
+    <string>/var/log/remote-agent/agent.error.log</string>
+</dict>
+</plist>
+PLIST
+
+# Unload if already running
+launchctl unload /Library/LaunchDaemons/com.remoteagent.plist 2>/dev/null || true
+
+# Load and start the service
+launchctl load -w /Library/LaunchDaemons/com.remoteagent.plist
+
+exit 0
