@@ -1,6 +1,3 @@
-# remote-access-nestjs-agent-with-backend-swagger-for-Network-protocols
-
-
 # Remote Access Agent
 
 A powerful remote access and device management system that enables real-time control and monitoring of computers across networks. The system consists of a lightweight Go agent that runs on target machines and a NestJS backend server that provides a WebSocket-based communication protocol.
@@ -441,4 +438,3 @@ pnpm run start:dev
 ## Support
 
 For issues and questions, please [create an issue](https://github.com/your-repo/issues) on GitHub.
-

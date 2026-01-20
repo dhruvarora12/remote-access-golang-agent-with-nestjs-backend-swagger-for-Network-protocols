@@ -1,0 +1,83 @@
+// Simplified Host Model - No user linking needed
+
+model Host {
+  id                   String             @id @default(uuid())
+  hostName             String             @unique
+  ipAddress            String             @unique
+  monitoringPeriodId   String?
+  vendorId             String?
+  monitoringInstanceId String?
+  status               HostStatus         @default(UNKNOWN)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  
+  // Basic host info
+  vendorName           String?
+  hostGroupId          String?
+  city                 String?
+  country              String?
+  criticality          String?
+  latitude             String
+  longitude            String
+  model                String?
+  parentId             String?
+  protocol             String?
+  remarks              String?
+  state                String?
+  tag                  String?
+  businessId           String?
+  siteId               String?
+  hostType             HostType           @default(OTHER)
+  
+  // ✅ AGENT FIELDS (All stay the same)
+  socketId             String?            @map("socket_id")
+  macAddress           String?            @map("mac_address")
+  os                   String?
+  arch                 String?
+  platform             String?
+  cpuInfo              Json?              @map("cpu_info")
+  memoryInfo           Json?              @map("memory_info")
+  diskInfo             Json?              @map("disk_info")
+  systemInfo           Json?              @map("system_info")
+  agentInstalled       Boolean            @default(false)
+  agentConnected       Boolean            @default(false)
+  agentLastSeen        DateTime?          @map("agent_last_seen")
+  agentInstalledAt     DateTime?          @map("agent_installed_at")
+  agentVersion         String?            @map("agent_version")
+  
+  // Relations (unchanged)
+  groups               GroupHost[]
+  business             Business?          @relation(fields: [businessId], references: [id])
+  hostGroup            HostGroup?         @relation(fields: [hostGroupId], references: [id])
+  monitoringInstance   MonitoringInstance? @relation(fields: [monitoringInstanceId], references: [id])
+  monitoringPeriod     MonitoringPeriod?   @relation(fields: [monitoringPeriodId], references: [id])
+  parent               Host?              @relation("HostToHost", fields: [parentId], references: [id])
+  children             Host[]             @relation("HostToHost")
+  site                 Site?              @relation(fields: [siteId], references: [id])
+  vendor               Vendor?            @relation(fields: [vendorId], references: [id])
+  statistics           HostStatistics[]
+  slas                 SlaHost[]
+  snmpConfiguration    SnmpConfiguration?
+  snmpMetrics          SnmpMetric[]
+  snmpTraps            SnmpTrap[]
+  TopologyNode         TopologyNode[]
+  commands             CommandHistory[]
+
+  @@index([monitoringPeriodId])
+  @@index([monitoringInstanceId])
+  @@index([businessId])
+  @@index([hostGroupId])
+  @@index([vendorId])
+  @@index([parentId])
+  @@index([siteId])
+  @@index([hostType])
+  @@index([socketId])
+  @@index([agentInstalled])
+  @@index([agentConnected])
+  @@index([agentLastSeen])
+}
+
+// ❌ REMOVE these models:
+// - Agent table (not needed)
+// - DownloadLog table (not needed)
+// - User.host relation (not needed)
