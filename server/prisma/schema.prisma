@@ -1,0 +1,1006 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                        String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name                      String
+  email                     String              @unique
+  phoneNumber               String?
+  password                  String
+  isMfaEnabled              Boolean             @default(false)
+  isLocked                  Boolean             @default(false)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  roleId                    String?
+  deletedAt                 DateTime?
+  parentId                  String?
+  businessId                String
+  siteId                    String?
+  createdCustomReports      CustomReport[]      @relation("CustomReportCreator")
+  mfa                       Mfa?
+  createdNetworkTopologies  NetworkTopology[]
+  business                  Business            @relation(fields: [businessId], references: [id])
+  parent                    User?               @relation("UserToChildren", fields: [parentId], references: [id])
+  children                  User[]              @relation("UserToChildren")
+  role                      Role?               @relation(fields: [roleId], references: [id])
+  Site                      Site?               @relation(fields: [siteId], references: [id])
+  sites                     UserSite[]
+  createdAlerts             Alert[]             @relation("UserCreatedAlerts")
+  alerts                    Alert[]
+  createdNotificationGroups NotificationGroup[] @relation("NotificationGroupCreator")
+  notificationGroups        NotificationGroup[] @relation("NotificationGroupUser")
+  ticketComments            TicketComment[]
+  ticketLogs                TicketLog[]
+  assignedTickets           Ticket[]            @relation("AssignedTickets")
+  createdTickets            Ticket[]            @relation("CreatedTickets")
+
+  @@index([siteId])
+}
+
+model UserLoginDetails {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId         String    @unique
+  lastLogin      DateTime  @default(now())
+  whitelistedIp  String[]
+  failedAttempts Int       @default(0)
+  lastFailedIp   String?
+  lastFailedAt   DateTime?
+}
+
+model Mfa {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String   @unique
+  secret    String
+  qrBase64  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Permission {
+  id         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  identifier String
+}
+
+model UserRole {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MonitoringConfiguration {
+  id                 String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name               String
+  alias              String               @unique
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  monitoringPeriodId String
+  monitoringType     MonitoringType?
+  monitoringPeriod   MonitoringPeriod     @relation(fields: [monitoringPeriodId], references: [id], onDelete: SetNull)
+  instances          MonitoringInstance[]
+}
+
+model MonitoringInstance {
+  id              String                   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  instanceId      String                   @unique
+  alias           String
+  host            String
+  port            Int
+  url             String
+  status          String
+  username        String?
+  secret          String?
+  configurationId String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+  siteId          String?
+  hosts           Host[]
+  hostStatistics  HostStatistics[]
+  configuration   MonitoringConfiguration? @relation(fields: [configurationId], references: [id])
+  Site            Site?                    @relation(fields: [siteId], references: [id])
+
+  @@index([siteId])
+}
+
+model HostGroup {
+  id             String   @id @default(uuid())
+  groupName      String   @unique
+  description    String
+  backupEligible Boolean  @default(false)
+  hostCount      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  siteId         String?
+  hosts          Host[]
+  site           Site?    @relation(fields: [siteId], references: [id])
+
+  @@index([siteId])
+}
+
+model HostStatistics {
+  id           String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  instanceId   String
+  responseTime Float
+  packetLoss   Float
+  availability Float
+  timestamp    DateTime           @default(now())
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  hostId       String?
+  host         Host?              @relation(fields: [hostId], references: [id])
+  instance     MonitoringInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+model HostHistory {
+  id         String   @default(dbgenerated("(gen_random_uuid())::text"))
+  state      String
+  host       String
+  timestamp  DateTime @default(now())
+  event      String
+  summary    String
+  instanceId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  metadata   Json?
+  hostId     String?
+
+  @@ignore
+}
+
+model Vendor {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  hosts       Host[]
+}
+
+model MonitoringPeriod {
+  id                String                    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name              String                    @unique
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  activeTimeRange   Json
+  alias             String                    @unique
+  excludeTimePeriod Json[]
+  hosts             Host[]
+  configurations    MonitoringConfiguration[]
+}
+
+model Host {
+  id                   String             @id @default(uuid())
+  hostName             String             @unique
+  ipAddress            String             @unique
+  monitoringPeriodId   String?
+  vendorId             String?
+  monitoringInstanceId String?
+  status               HostStatus         @default(UNKNOWN)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  // ❌ REMOVED: agentId, userId fields
+  vendorName           String?
+  hostGroupId          String?
+  city                 String?
+  country              String?
+  criticality          String?
+  latitude             String
+  longitude            String
+  model                String?
+  parentId             String?
+  protocol             String?
+  remarks              String?
+  state                String?
+  tag                  String?
+  businessId           String?
+  siteId               String?
+  hostType             HostType           @default(OTHER)
+  
+  // ✅ AGENT FIELDS - ALL STAY
+  socketId             String?            @map("socket_id") @db.VarChar(255)
+  macAddress           String?            @map("mac_address") @db.VarChar(17)
+  os                   String?            @db.VarChar(50)
+  arch                 String?            @db.VarChar(50)
+  platform             String?            @db.VarChar(50)
+  cpuInfo              Json?              @map("cpu_info")
+  memoryInfo           Json?              @map("memory_info")
+  diskInfo             Json?              @map("disk_info")
+  systemInfo           Json?              @map("system_info")
+  agentInstalled       Boolean            @default(false) @map("agent_installed")
+  agentConnected       Boolean            @default(false) @map("agent_connected")
+  agentLastSeen        DateTime?          @map("agent_last_seen") @db.Timestamp(6)
+  agentInstalledAt     DateTime?          @map("agent_installed_at") @db.Timestamp(6)
+  agentVersion         String?            @map("agent_version") @db.VarChar(20)
+  
+  // ✅ RELATIONS - Removed user and agent relations
+  groups               GroupHost[]
+  business             Business?          @relation(fields: [businessId], references: [id])
+  hostGroup            HostGroup?         @relation(fields: [hostGroupId], references: [id])
+  monitoringInstance   MonitoringInstance? @relation(fields: [monitoringInstanceId], references: [id])
+  monitoringPeriod     MonitoringPeriod?   @relation(fields: [monitoringPeriodId], references: [id])
+  parent               Host?              @relation("HostToHost", fields: [parentId], references: [id])
+  children             Host[]             @relation("HostToHost")
+  site                 Site?              @relation(fields: [siteId], references: [id])
+  vendor               Vendor?            @relation(fields: [vendorId], references: [id])
+  // ❌ REMOVED: user relation, agent relation
+  statistics           HostStatistics[]
+  slas                 SlaHost[]
+  snmpConfiguration    SnmpConfiguration?
+  snmpMetrics          SnmpMetric[]
+  snmpTraps            SnmpTrap[]
+  TopologyNode         TopologyNode[]
+  commands             CommandHistory[]
+
+  @@index([monitoringPeriodId])
+  @@index([monitoringInstanceId])
+  @@index([businessId])
+  @@index([hostGroupId])
+  @@index([vendorId])
+  @@index([parentId])
+  @@index([siteId])
+  @@index([hostType])
+  @@index([socketId])
+  @@index([agentInstalled])
+  @@index([agentConnected])
+  @@index([agentLastSeen])
+  // ❌ REMOVED: @@index([userId]), @@index([agentId])
+}
+
+
+model Role {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  permissions String[]
+  parentId    String?
+  parent      Role?    @relation("RoleHierarchy", fields: [parentId], references: [id])
+  children    Role[]   @relation("RoleHierarchy")
+  users       User[]
+}
+
+model UserLogs {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  username     String
+  action       String
+  clientIp     String
+  remarks      String?
+  data         Json?
+  activityTime DateTime @default(now())
+  success      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model EmailConfig {
+  id            String   @id @default(uuid())
+  emailAddress  String
+  password      String
+  outgoingHost  String
+  outgoingPort  Int
+  useTLS        Boolean  @default(true)
+  fromName      String
+  isDefault     Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  retryAttempts Int      @default(3)
+  timeoutSecs   Int      @default(30)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model EmailLog {
+  id         String   @id @default(uuid())
+  recipients String[]
+  subject    String
+  status     String
+  messageId  String?
+  error      String?
+  timestamp  DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model NotificationGroup {
+  id              String                  @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name            String                  @unique
+  description     String?
+  emails          String[]
+  isActive        Boolean                 @default(true)
+  createdBy       String
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @default(now())
+  businessId      String
+  userId          String
+  alertType       AlertType?
+  createdByUserId String?
+  groupId         String?
+  siteId          String?
+  reportSchedules ServiceReportSchedule[]
+  createdByUser   User                    @relation("NotificationGroupCreator", fields: [createdBy], references: [id])
+  user            User                    @relation("NotificationGroupUser", fields: [userId], references: [id])
+
+  @@index([createdBy])
+  @@index([businessId])
+  @@index([userId])
+  @@index([siteId])
+  @@map("notification_groups")
+}
+
+model Alert {
+  id                  String      @id @default(dbgenerated("(gen_random_uuid())::text"))
+  description         String?
+  severity            String
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @default(now())
+  businessId          String?
+  name                String
+  notificationGroupId String?
+  source              String
+  type                AlertType
+  userId              String
+  alertName           String?
+  alertType           AlertType?
+  createdByUserId     String?
+  groupId             String?
+  isActive            Boolean?
+  metadata            Json?
+  isSystemGenerated   Boolean?    @default(false)
+  siteId              String?
+  status              AlertStatus @default(ACTIVE)
+  business            Business?   @relation(fields: [businessId], references: [id])
+  createdByUser       User?       @relation("UserCreatedAlerts", fields: [createdByUserId], references: [id])
+  site                Site?       @relation(fields: [siteId], references: [id])
+  user                User        @relation(fields: [userId], references: [id])
+  tickets             Ticket[]    @relation("AlertTickets")
+
+  @@index([businessId])
+  @@index([userId])
+  @@index([notificationGroupId])
+  @@index([siteId])
+  @@map("alerts")
+}
+
+model Ticket {
+  id           String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  title        String
+  description  String
+  status       TicketStatus    @default(OPEN)
+  priority     TicketPriority  @default(MEDIUM)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @default(now())
+  businessId   String
+  assignedToId String?
+  createdById  String
+  siteId       String?
+  alertId      String?
+  closedAt     DateTime?
+  resolvedAt   DateTime?
+  comments     TicketComment[]
+  ticketLogs   TicketLog[]
+  alert        Alert?          @relation("AlertTickets", fields: [alertId], references: [id])
+  assignedTo   User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  business     Business        @relation(fields: [businessId], references: [id])
+  createdBy    User            @relation("CreatedTickets", fields: [createdById], references: [id])
+  site         Site?           @relation(fields: [siteId], references: [id])
+
+  @@index([businessId])
+  @@index([createdById])
+  @@index([assignedToId])
+  @@index([siteId])
+  @@index([alertId])
+  @@map("tickets")
+}
+
+model TicketComment {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  content   String
+  ticketId  String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+  @@map("ticket_comments")
+}
+
+model TicketLog {
+  id          String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  ticketId    String
+  userId      String
+  action      String
+  oldValue    String?
+  newValue    String?
+  fieldName   String?
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  ticket      Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([action])
+  @@index([fieldName])
+  @@index([createdAt])
+  @@map("ticket_logs")
+}
+
+model HostCreationJob {
+  id              String    @id @default(uuid())
+  requestId       String    @unique
+  totalHosts      Int
+  processedHosts  Int       @default(0)
+  failedHosts     Int       @default(0)
+  successfulHosts Int       @default(0)
+  status          JobStatus @default(PENDING)
+  errorDetails    Json?
+  startedAt       DateTime  @default(now())
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model devices {
+  id          Int       @id @default(autoincrement())
+  ip_address  String    @unique @db.VarChar(40)
+  hostname    String?   @db.VarChar(255)
+  device_type String?   @db.VarChar(50)
+  location    String?   @db.VarChar(100)
+  status      String?   @default("unknown") @db.VarChar(20)
+  last_seen   DateTime? @db.Timestamptz(6)
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
+}
+
+model icmp_alerts {
+  id           Int       @id @default(autoincrement())
+  device_ip    String    @db.VarChar(40)
+  alert_type   String    @db.VarChar(50)
+  severity     String    @db.VarChar(20)
+  message      String
+  timestamp    DateTime? @default(now()) @db.Timestamptz(6)
+  acknowledged Boolean?  @default(false)
+  resolved     Boolean?  @default(false)
+  resolved_at  DateTime? @db.Timestamptz(6)
+}
+
+model icmp_results {
+  id         Int      @id @default(autoincrement())
+  device_ip  String   @db.VarChar(40)
+  success    Boolean
+  latency_ms Int?
+  timestamp  DateTime @db.Timestamptz(6)
+}
+
+model ServiceReportSchedule {
+  id                  String             @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name                String
+  reportType          String
+  hostSelection       Json
+  scheduleFrequency   String
+  startDate           DateTime
+  endDate             DateTime?
+  startTime           String
+  emailRecipients     String[]
+  emailSubject        String
+  notificationGroupId String?
+  fileFormat          String
+  isActive            Boolean            @default(true)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  lastRun             DateTime?
+  notificationGroup   NotificationGroup? @relation(fields: [notificationGroupId], references: [id])
+
+  @@index([notificationGroupId])
+}
+
+model SnmpConfiguration {
+  id            String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  hostId        String   @unique
+  version       String   @default("2c")
+  community     String?
+  port          Int      @default(161)
+  username      String?
+  authProtocol  String?
+  authKey       String?
+  privProtocol  String?
+  privKey       String?
+  securityLevel String?
+  contextName   String?
+  timeout       Int      @default(5)
+  retries       Int      @default(3)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  host          Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+}
+
+model SnmpOidMapping {
+  id          String       @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name        String
+  oid         String
+  description String?
+  dataType    String
+  isActive    Boolean      @default(true)
+  isCustom    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  metrics     SnmpMetric[]
+}
+
+model SnmpMetric {
+  id           String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  hostId       String
+  oidMappingId String
+  value        String
+  timestamp    DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  host         Host           @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  oidMapping   SnmpOidMapping @relation(fields: [oidMappingId], references: [id])
+
+  @@index([hostId])
+  @@index([oidMappingId])
+  @@index([timestamp])
+}
+
+model SnmpTrap {
+  id           String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  hostId       String
+  trapOid      String
+  agentAddress String
+  variables    Json
+  timestamp    DateTime @default(now())
+  processed    Boolean  @default(false)
+  severity     String   @default("INFO")
+  message      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  host         Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([hostId])
+  @@index([timestamp])
+}
+
+model Site {
+  id                 String               @id @default(dbgenerated("(gen_random_uuid())::text"))
+  location           String?
+  latitude           String?
+  longitude          String?
+  state              String?
+  city               String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @default(now()) @updatedAt
+  businessId         String
+  description        String?
+  isactive           Boolean              @default(true)
+  name               String
+  timezone           String?              @default("UTC")
+  zipcode            String?
+  customReports      CustomReport[]
+  groups             GroupSite[]
+  hosts              Host[]
+  hostGroups         HostGroup[]
+  MonitoringInstance MonitoringInstance[]
+  networkTopologies  NetworkTopology[]
+  Business           Business             @relation(fields: [businessId], references: [id])
+  slas               SlaSite[]
+  User               User[]
+  users              UserSite[]
+  alerts             Alert[]
+  tickets            Ticket[]
+
+  @@unique([name, businessId])
+  @@index([state])
+  @@index([city])
+  @@index([businessId])
+  @@index([isactive])
+  @@index([timezone])
+}
+
+model UserSite {
+  id        String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  userId    String
+  siteId    String
+  createdAt DateTime @default(now())
+  role      String?  @default("viewer")
+  updatedAt DateTime @default(now())
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, siteId])
+  @@index([userId])
+  @@index([siteId])
+  @@index([role])
+}
+
+model Group {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  businessId  String
+  business    Business    @relation(fields: [businessId], references: [id])
+  hosts       GroupHost[]
+  sites       GroupSite[]
+  slas        SlaGroup[]
+
+  @@unique([name, businessId])
+  @@index([businessId])
+  @@index([isActive])
+}
+
+model GroupSite {
+  id        String   @id @default(uuid())
+  groupId   String
+  siteId    String
+  createdAt DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  site      Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, siteId])
+  @@index([groupId])
+  @@index([siteId])
+}
+
+model GroupHost {
+  id        String   @id @default(uuid())
+  groupId   String
+  hostId    String
+  createdAt DateTime @default(now())
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  host      Host     @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, hostId])
+  @@index([groupId])
+  @@index([hostId])
+}
+
+model Business {
+  id                String            @id @default(uuid())
+  name              String
+  domain            String            @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  customReports     CustomReport[]
+  groups            Group[]
+  hosts             Host[]
+  networkTopologies NetworkTopology[]
+  Site              Site[]
+  slas              Sla[]
+  users             User[]
+  alerts            Alert[]
+  tickets           Ticket[]
+}
+
+model SlaHost {
+  id     String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slaId  String
+  hostId String
+  host   Host   @relation(fields: [hostId], references: [id], onDelete: Cascade)
+  sla    Sla    @relation(fields: [slaId], references: [id], onDelete: Cascade)
+
+  @@unique([slaId, hostId])
+  @@index([slaId])
+  @@index([hostId])
+}
+
+model SlaSite {
+  id     String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slaId  String
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  sla    Sla    @relation(fields: [slaId], references: [id], onDelete: Cascade)
+
+  @@unique([slaId, siteId])
+  @@index([slaId])
+  @@index([siteId])
+}
+
+model SlaGroup {
+  id      String @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slaId   String
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sla     Sla    @relation(fields: [slaId], references: [id], onDelete: Cascade)
+
+  @@unique([slaId, groupId])
+  @@index([slaId])
+  @@index([groupId])
+}
+
+model Sla {
+  id               String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name             String
+  description      String?
+  serviceType      String
+  targetValue      Float
+  targetUnit       String
+  measurementType  String
+  monitoringPeriod String
+  businessId       String
+  hostIds          String[]       @default([])
+  siteIds          String[]       @default([])
+  groupIds         String[]       @default([])
+  isActive         Boolean        @default(true)
+  startDate        DateTime?
+  endDate          DateTime?
+  alertThreshold   Float?
+  escalationRules  Json?
+  contactEmails    String[]       @default([])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  createdBy        String?
+  updatedBy        String?
+  slaType          String
+  business         Business       @relation(fields: [businessId], references: [id])
+  groups           SlaGroup[]
+  hosts            SlaHost[]
+  sites            SlaSite[]
+  violations       SlaViolation[]
+
+  @@unique([name, businessId])
+  @@index([businessId])
+  @@index([slaType])
+  @@index([serviceType])
+  @@index([isActive])
+  @@index([monitoringPeriod])
+}
+
+model SlaViolation {
+  id             String    @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slaId          String
+  violationType  String
+  actualValue    Float
+  expectedValue  Float
+  violationStart DateTime
+  violationEnd   DateTime?
+  duration       Int?
+  affectedHosts  String[]  @default([])
+  affectedSites  String[]  @default([])
+  severity       String    @default("MEDIUM")
+  status         String    @default("OPEN")
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  comments       String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  sla            Sla       @relation(fields: [slaId], references: [id], onDelete: Cascade)
+
+  @@index([slaId])
+  @@index([violationType])
+  @@index([severity])
+  @@index([status])
+  @@index([violationStart])
+}
+
+model SlaReport {
+  id               String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+  slaId            String
+  reportPeriod     String
+  periodStart      DateTime
+  periodEnd        DateTime
+  targetValue      Float
+  actualValue      Float
+  compliance       Float
+  totalViolations  Int      @default(0)
+  totalDowntime    Int      @default(0)
+  availabilityData Json?
+  generatedAt      DateTime @default(now())
+  generatedBy      String?
+
+  @@index([slaId])
+  @@index([reportPeriod])
+  @@index([periodStart])
+  @@index([periodEnd])
+}
+
+model NetworkTopology {
+  id           String         @id @default(dbgenerated("(gen_random_uuid())::text"))
+  name         String         @unique
+  description  String?
+  createdBy    String
+  businessId   String?
+  siteId       String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  metadata     Json
+  business     Business?      @relation(fields: [businessId], references: [id])
+  creator      User           @relation(fields: [createdBy], references: [id])
+  site         Site?          @relation(fields: [siteId], references: [id])
+  TopologyEdge TopologyEdge[]
+  TopologyNode TopologyNode[]
+
+  @@index([businessId])
+  @@index([siteId])
+  @@index([createdBy])
+}
+
+model TopologyEdge {
+  id                                                   String          @id
+  edgeId                                               String
+  topologyId                                           String
+  sourceNodeId                                         String
+  targetNodeId                                         String
+  connectionType                                       String          @default("ETHERNET")
+  bandwidth                                            String?
+  status                                               String          @default("ACTIVE")
+  customProperties                                     Json?
+  createdAt                                            DateTime        @default(now())
+  updatedAt                                            DateTime
+  TopologyNode_TopologyEdge_sourceNodeIdToTopologyNode TopologyNode    @relation("TopologyEdge_sourceNodeIdToTopologyNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  TopologyNode_TopologyEdge_targetNodeIdToTopologyNode TopologyNode    @relation("TopologyEdge_targetNodeIdToTopologyNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  NetworkTopology                                      NetworkTopology @relation(fields: [topologyId], references: [id], onDelete: Cascade)
+
+  @@unique([topologyId, edgeId])
+  @@index([sourceNodeId])
+  @@index([targetNodeId])
+  @@index([topologyId])
+}
+
+model TopologyNode {
+  id                                                   String          @id
+  nodeId                                               String
+  topologyId                                           String
+  hostId                                               String?
+  displayName                                          String
+  nodeType                                             String          @default("HOST")
+  position                                             Json?
+  customProperties                                     Json?
+  createdAt                                            DateTime        @default(now())
+  updatedAt                                            DateTime
+  TopologyEdge_TopologyEdge_sourceNodeIdToTopologyNode TopologyEdge[]  @relation("TopologyEdge_sourceNodeIdToTopologyNode")
+  TopologyEdge_TopologyEdge_targetNodeIdToTopologyNode TopologyEdge[]  @relation("TopologyEdge_targetNodeIdToTopologyNode")
+  Host                                                 Host?           @relation(fields: [hostId], references: [id])
+  NetworkTopology                                      NetworkTopology @relation(fields: [topologyId], references: [id], onDelete: Cascade)
+
+  @@unique([topologyId, nodeId])
+  @@index([hostId])
+  @@index([topologyId])
+}
+
+model CustomReport {
+  id             String    @id @default(uuid())
+  reportName     String
+  description    String?
+  reportType     String?
+  configuration  Json?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  createdBy      String
+  businessId     String
+  siteId         String?
+  tags           String[]  @default([])
+  lastExecuted   DateTime?
+  executionCount Int       @default(0)
+  metadata       Json?
+  business       Business  @relation(fields: [businessId], references: [id])
+  creator        User      @relation("CustomReportCreator", fields: [createdBy], references: [id])
+  site           Site?     @relation(fields: [siteId], references: [id])
+
+  @@unique([reportName, businessId])
+  @@index([businessId])
+  @@index([createdBy])
+  @@index([siteId])
+  @@index([isActive])
+}
+
+
+model CommandHistory {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  hostId       String    @map("host_id")
+  command      String
+  args         String?
+  rawOutput    String?   @map("raw_output")
+  parsedOutput Json?     @map("parsed_output")
+  error        String?
+  exitCode     Int?      @map("exit_code")
+  status       String?   @default("pending") @db.VarChar(20)
+  executedAt   DateTime? @default(now()) @map("executed_at") @db.Timestamp(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamp(6)
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  host         Host      @relation(fields: [hostId], references: [id], onDelete: Cascade)
+
+  @@index([hostId], map: "idx_command_history_host_id")
+  @@index([executedAt(sort: Desc)], map: "idx_command_history_executed_at")
+  @@index([status], map: "idx_command_history_status")
+  @@map("command_history")
+}
+
+
+
+enum MonitoringType {
+  AVAILABILITY
+  PERFORMANCE
+  NETWORK
+  RESOURCE
+  SERVICE
+  SECURITY
+  CUSTOM
+  SNMP
+}
+
+enum HostStatus {
+  UP
+  DOWN
+  UNKNOWN
+  ACTIVE
+  UNDER_MAINTENANCE
+}
+
+enum HostType {
+  SERVER
+  ROUTER
+  SWITCH
+  MODEM
+  FIREWALL
+  LOAD_BALANCER
+  ACCESS_POINT
+  PRINTER
+  CAMERA
+  IOT_DEVICE
+  WORKSTATION
+  DATABASE
+  WEB_SERVER
+  STORAGE
+  OTHER
+}
+
+enum AlertType {
+  EMAIL_ALERT
+  LOG_ALERT
+  SYSTEM_ALERT
+  MONITORING_ALERT
+  SECURITY_ALERT
+  PERFORMANCE_ALERT
+  SLA_ALERT
+}
+
+enum AlertStatus {
+  ACTIVE
+  RESOLVED
+  FALSE
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  PARTIALLY_COMPLETED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
