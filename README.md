@@ -407,17 +407,11 @@ pnpm run start:dev
 2. Check firewall allows ICMP/ARP
 3. For routers, verify tools available (`arp`, `ip`, etc.)
 
-## License
-
-[Add your license here]
-
 ## Author
 
 **Dhruv Arora**
 
-## Contributing
 
-[Add contribution guidelines if applicable]
 
 ## Support
 
